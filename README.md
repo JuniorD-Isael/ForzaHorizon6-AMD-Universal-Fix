@@ -6,11 +6,6 @@ Criado por **João Lucas**.
 
 Canal no YouTube: https://www.youtube.com/@MEGADROIDGAMESS
 
-## Nome sugerido para o repositório
-
-```text
-forza-rx580-fh201-fh205-fix
-```
 
 ## Antes de começar
 
