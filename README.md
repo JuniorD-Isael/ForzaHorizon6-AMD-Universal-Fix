@@ -36,7 +36,7 @@ O driver utilizado e homologado durante os testes foi:
    **Exemplo:**
 
    ```text
-   ...\GameFolder\d3d12.dll
+   ...\ForzaHorizon6\d3d12.dll
    ```
 
 5. Inicialize o jogo normalmente.
@@ -140,19 +140,6 @@ Utilize PowerShell no ambiente de desenvolvedor do Visual Studio:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build_proxy.ps1
 ```
-
----
-
-## Nota sobre Compatibilidade do SDK
-
-Dependendo da build do Windows SDK, o compilador pode ocultar definições modernas relacionadas à memória de vídeo do Direct3D 12.
-
-Caso ocorram erros de compilação relacionados a identificadores de VRAM, utilize compilação direta via CLI:
-
-```powershell
-cl.exe /c /EHsc /O2 /DNTDDI_WIN10_RS1 /I. src\D3D12Proxy.cpp
-```
-
 ---
 
 # 📜 Histórico de Modificações e Créditos
