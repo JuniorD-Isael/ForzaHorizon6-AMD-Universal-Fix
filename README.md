@@ -187,3 +187,6 @@ Forçada a exposição de capacidades críticas do Direct3D 12:
 ---
 
 Este fork mantém os devidos créditos ao trabalho original de João Lucas, expandindo a compatibilidade prática para novos cenários envolvendo APUs AMD e hardware integrado.
+
+### License
+This project is licensed under the MIT License - see the LICENSE file for details.
