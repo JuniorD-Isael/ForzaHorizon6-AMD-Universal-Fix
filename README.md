@@ -30,8 +30,8 @@ O driver utilizado e homologado durante os testes foi:
 
 1. Baixe os arquivos da última versão deste repositório.
 2. Acesse a pasta `bin`.
-3. Copie o arquivo `d3d12.dll`.
-4. Cole o arquivo diretamente no diretório principal do jogo (onde está localizado o executável `.exe`).
+3. Copie os arquivos `d3d12.dll` e `dxgi.dll`.
+4. Cole os dois arquivos diretamente no diretório principal do jogo (onde está localizado o executável `.exe`).
 
    **Exemplo:**
 
@@ -66,13 +66,13 @@ Copie os DLLs gerados em `proxy_build` para o diretório principal do jogo:
 
 - Se o jogo avançar além da tela preta inicial, o handshake está ocorrendo dentro da janela esperada.
 - Se o log mostrar `STATUS: Device Patched and Handshake complete. Waiting for Engine.`, mas a tela preta continuar, o gargalo provavelmente está no pipeline interno do ForzaTech.
-- Se o `ForzaFix_RX580.log` registrar `LATENCY: Patch->MeshShaderTier = X ms`, esse valor ajuda a medir quanto tempo o runtime levou para consultar o shader tier após o patch.
+- Se o `ForzaFix_iGPU_.log` registrar `LATENCY: Patch->MeshShaderTier = X ms`, esse valor ajuda a medir quanto tempo o runtime levou para consultar o shader tier após o patch.
 
 ## Arquivos de retorno úteis
 
 Se algo falhar, envie junto com o relato:
 
-- `ForzaFix_RX580.log`
+- `ForzaFix_iGPU_.log`
 - `CrashReport.xml`
 - `ShutdownReport.xml`
 - print da tela preta, se houver
@@ -218,7 +218,7 @@ cl.exe /c /EHsc /O2 /DNTDDI_WIN10_RS1 /I. src\D3D12Proxy.cpp
 
 ### Bypass de VRAM para APUs
 
-Adicionado hook no índice 56 da *vtable* (`QueryVideoMemoryInfo`) utilizando mapeamento direto de memória via ponteiros (`uint64_t`).
+Adicionado hook no `QueryVideoMemoryInfo` utilizando mapeamento direto de memória via ponteiros (`uint64_t`), além do proxy `dxgi.dll` para cobrir as leituras de VRAM expostas por versões mais novas das interfaces DXGI.
 
 Isso contorna o problema de orçamento zero de memória compartilhada que causava falhas críticas de leitura em gráficos integrados.
 

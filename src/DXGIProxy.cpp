@@ -49,7 +49,7 @@ static constexpr UINT64 kReportedDedicatedVideoMemory = 4ULL * 1024ULL * 1024ULL
 
 static void Log(const char* msg) {
     std::lock_guard<std::mutex> lock(g_logMutex);
-    std::ofstream log("ForzaFix_RX580.log", std::ios::app);
+    std::ofstream log("ForzaFix_iGPU_.log", std::ios::app);
     if (!log) return;
 
     auto now = std::chrono::system_clock::now();
