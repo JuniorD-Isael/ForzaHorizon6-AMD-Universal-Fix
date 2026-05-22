@@ -43,6 +43,51 @@ O driver utilizado e homologado durante os testes foi:
 
 ---
 
+# 🧪 Como os Usuários Devem Testar Esta Versão
+
+Esta build já passou pelos testes locais de proxy DXGI + D3D12, então o objetivo agora é coletar retorno do ambiente real do usuário.
+
+## Arquivos a copiar para a pasta do jogo
+
+Copie os DLLs gerados em `proxy_build` para o diretório principal do jogo:
+
+- `d3d12.dll`
+- `dxgi.dll`
+
+## Sequência recomendada de teste
+
+1. Feche o jogo completamente se ele estiver aberto.
+2. Copie as duas DLLs para a pasta do executável do jogo.
+3. Inicie o jogo uma vez e aguarde a inicialização completa.
+4. Se ocorrer tela preta, aguarde até 1 minuto antes de encerrar e iniciar novamente.
+5. Repita o teste com o jogo fechado e reaberto para validar boots sucessivos.
+
+## O que observar
+
+- Se o jogo avançar além da tela preta inicial, o handshake está ocorrendo dentro da janela esperada.
+- Se o log mostrar `STATUS: Device Patched and Handshake complete. Waiting for Engine.`, mas a tela preta continuar, o gargalo provavelmente está no pipeline interno do ForzaTech.
+- Se o `ForzaFix_RX580.log` registrar `LATENCY: Patch->MeshShaderTier = X ms`, esse valor ajuda a medir quanto tempo o runtime levou para consultar o shader tier após o patch.
+
+## Arquivos de retorno úteis
+
+Se algo falhar, envie junto com o relato:
+
+- `ForzaFix_RX580.log`
+- `CrashReport.xml`
+- `ShutdownReport.xml`
+- print da tela preta, se houver
+
+## Build para manutenção local
+
+Se você quiser recompilar as DLLs antes de testar:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_proxy.ps1
+powershell -ExecutionPolicy Bypass -File .\build_proxy.ps1 -target dxgi
+```
+
+---
+
 # ⚠️ Nota Importante de Inicialização
 
 Na primeiríssima tentativa após colocar a DLL, o jogo pode entrar em tela preta e travar.
