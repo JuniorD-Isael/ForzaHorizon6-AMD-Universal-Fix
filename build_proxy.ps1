@@ -1,13 +1,27 @@
+param(
+    [string]$target = "d3d12"
+)
+
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $OutDir = Join-Path $Root "proxy_build"
-$Src = Join-Path $Root "src\D3D12Proxy.cpp"
-$Asm = Join-Path $Root "src\D3D12ProxyStubs.asm"
-$Def = Join-Path $Root "src\d3d12_proxy.def"
-$Out = Join-Path $OutDir "d3d12.dll"
-$Obj = Join-Path $OutDir "D3D12Proxy.obj"
-$AsmObj = Join-Path $OutDir "D3D12ProxyStubs.obj"
+
+if ($target -eq "dxgi") {
+    $Src = Join-Path $Root "src\DXGIProxy.cpp"
+    $Asm = Join-Path $Root "src\DXGIProxyStubs.asm"
+    $Def = Join-Path $Root "src\dxgi_proxy.def"
+    $Out = Join-Path $OutDir "dxgi.dll"
+    $Obj = Join-Path $OutDir "DXGIProxy.obj"
+    $AsmObj = Join-Path $OutDir "DXGIProxyStubs.obj"
+} else {
+    $Src = Join-Path $Root "src\D3D12Proxy.cpp"
+    $Asm = Join-Path $Root "src\D3D12ProxyStubs.asm"
+    $Def = Join-Path $Root "src\d3d12_proxy.def"
+    $Out = Join-Path $OutDir "d3d12.dll"
+    $Obj = Join-Path $OutDir "D3D12Proxy.obj"
+    $AsmObj = Join-Path $OutDir "D3D12ProxyStubs.obj"
+}
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
