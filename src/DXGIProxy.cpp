@@ -26,6 +26,7 @@ using EnumAdapters3_t = HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory4*, UINT, IDXGIA
 using AdapterGetDesc_t = HRESULT(STDMETHODCALLTYPE*)(IDXGIAdapter*, DXGI_ADAPTER_DESC*);
 using AdapterGetDesc1_t = HRESULT(STDMETHODCALLTYPE*)(IDXGIAdapter1*, DXGI_ADAPTER_DESC1*);
 using AdapterGetDesc2_t = HRESULT(STDMETHODCALLTYPE*)(IDXGIAdapter2*, DXGI_ADAPTER_DESC2*);
+using CreateSwapChain_t = HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory*, IUnknown*, DXGI_SWAP_CHAIN_DESC*, IDXGISwapChain**);
 
 static CreateDXGIFactory_t g_originalCreateDXGIFactory = nullptr;
 static CreateDXGIFactory2_t g_originalCreateDXGIFactory2 = nullptr;
@@ -37,6 +38,7 @@ static EnumAdapters3_t g_originalEnumAdapters3 = nullptr;
 static AdapterGetDesc_t g_originalAdapterGetDesc = nullptr;
 static AdapterGetDesc1_t g_originalAdapterGetDesc1 = nullptr;
 static AdapterGetDesc2_t g_originalAdapterGetDesc2 = nullptr;
+static CreateSwapChain_t g_originalCreateSwapChain = nullptr;
 
 static constexpr size_t kEnumAdaptersVtableIndex = 7;
 static constexpr size_t kGetDescVtableIndex = 8;
@@ -45,7 +47,8 @@ static constexpr size_t kGetDesc1VtableIndex = 10;
 static constexpr size_t kEnumAdapters2VtableIndex = 14;
 static constexpr size_t kGetDesc2VtableIndex = 11;
 static constexpr size_t kEnumAdapters3VtableIndex = 16;
-static constexpr UINT64 kReportedDedicatedVideoMemory = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+static constexpr UINT64 kReportedDedicatedVideoMemory = 8ULL * 1024ULL * 1024ULL * 1024ULL;
+static constexpr size_t kCreateSwapChainVtableIndex = 10;
 
 static void Log(const char* msg) {
     std::lock_guard<std::mutex> lock(g_logMutex);
@@ -107,7 +110,7 @@ static HRESULT STDMETHODCALLTYPE HookedAdapterGetDesc(IDXGIAdapter* self, DXGI_A
         desc->DedicatedVideoMemory = static_cast<SIZE_T>(kReportedDedicatedVideoMemory);
         std::string adapterName = WideToUtf8(desc->Description);
         if (g_vramLogCount < kMaxVramLogs && IsFirstAdapterSeen(adapterName)) {
-            Log((std::string("SPOOF: GetDesc -> 4GB em: ") + adapterName).c_str());
+            Log((std::string("SPOOF: GetDesc -> 8GB em: ") + adapterName).c_str());
             ++g_vramLogCount;
         }
     }
@@ -120,7 +123,7 @@ static HRESULT STDMETHODCALLTYPE HookedAdapterGetDesc1(IDXGIAdapter1* self, DXGI
         desc->DedicatedVideoMemory = static_cast<SIZE_T>(kReportedDedicatedVideoMemory);
         std::string adapterName = WideToUtf8(desc->Description);
         if (g_vramLogCount < kMaxVramLogs && IsFirstAdapterSeen(adapterName)) {
-            Log((std::string("SPOOF: GetDesc1 -> 4GB em: ") + adapterName).c_str());
+            Log((std::string("SPOOF: GetDesc1 -> 8GB em: ") + adapterName).c_str());
             ++g_vramLogCount;
         }
     }
@@ -133,11 +136,29 @@ static HRESULT STDMETHODCALLTYPE HookedAdapterGetDesc2(IDXGIAdapter2* self, DXGI
         desc->DedicatedVideoMemory = static_cast<SIZE_T>(kReportedDedicatedVideoMemory);
         std::string adapterName = WideToUtf8(desc->Description);
         if (g_vramLogCount < kMaxVramLogs && IsFirstAdapterSeen(adapterName)) {
-            Log((std::string("SPOOF: GetDesc2 -> 4GB em: ") + adapterName).c_str());
+            Log((std::string("SPOOF: GetDesc2 -> 8GB em: ") + adapterName).c_str());
             ++g_vramLogCount;
         }
     }
     return hr;
+}
+
+static HRESULT STDMETHODCALLTYPE HookedFactoryCreateSwapChain(
+    IDXGIFactory* self,
+    IUnknown* pDevice,
+    DXGI_SWAP_CHAIN_DESC* pDesc,
+    IDXGISwapChain** ppSwapChain
+) {
+    if (pDesc) {
+        if (pDesc->BufferCount < 2) {
+            pDesc->BufferCount = 2;
+        }
+        pDesc->SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        pDesc->Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        Log("SPOOF: CreateSwapChain forçado para Flip Discard");
+    }
+
+    return g_originalCreateSwapChain ? g_originalCreateSwapChain(self, pDevice, pDesc, ppSwapChain) : E_FAIL;
 }
 
 static void PatchAdapterInterfaceHooks(IUnknown* adapterUnknown) {
@@ -223,10 +244,16 @@ static void PatchFactoryInterfaces(IUnknown* factoryUnknown) {
         if (!g_originalEnumAdapters) {
             g_originalEnumAdapters = reinterpret_cast<EnumAdapters_t>(vtable[kEnumAdaptersVtableIndex]);
         }
+        if (!g_originalCreateSwapChain) {
+            g_originalCreateSwapChain = reinterpret_cast<CreateSwapChain_t>(vtable[kCreateSwapChainVtableIndex]);
+        }
         __try {
             VirtualProtect(&vtable[kEnumAdaptersVtableIndex], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
             vtable[kEnumAdaptersVtableIndex] = reinterpret_cast<void*>(&HookedFactoryEnumAdapters);
             VirtualProtect(&vtable[kEnumAdaptersVtableIndex], sizeof(void*), oldProtect, &oldProtect);
+            VirtualProtect(&vtable[kCreateSwapChainVtableIndex], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
+            vtable[kCreateSwapChainVtableIndex] = reinterpret_cast<void*>(&HookedFactoryCreateSwapChain);
+            VirtualProtect(&vtable[kCreateSwapChainVtableIndex], sizeof(void*), oldProtect, &oldProtect);
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             Log("PatchFactoryInterfaces: exceção capturada em IDXGIFactory::EnumAdapters");
         }
@@ -243,10 +270,16 @@ static void PatchFactoryInterfaces(IUnknown* factoryUnknown) {
         if (!g_originalEnumAdapters1) {
             g_originalEnumAdapters1 = reinterpret_cast<EnumAdapters1_t>(vtable[kEnumAdapters1VtableIndex]);
         }
+        if (!g_originalCreateSwapChain) {
+            g_originalCreateSwapChain = reinterpret_cast<CreateSwapChain_t>(vtable[kCreateSwapChainVtableIndex]);
+        }
         __try {
             VirtualProtect(&vtable[kEnumAdapters1VtableIndex], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
             vtable[kEnumAdapters1VtableIndex] = reinterpret_cast<void*>(&HookedFactoryEnumAdapters1);
             VirtualProtect(&vtable[kEnumAdapters1VtableIndex], sizeof(void*), oldProtect, &oldProtect);
+            VirtualProtect(&vtable[kCreateSwapChainVtableIndex], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
+            vtable[kCreateSwapChainVtableIndex] = reinterpret_cast<void*>(&HookedFactoryCreateSwapChain);
+            VirtualProtect(&vtable[kCreateSwapChainVtableIndex], sizeof(void*), oldProtect, &oldProtect);
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             Log("PatchFactoryInterfaces: exceção capturada em IDXGIFactory1::EnumAdapters1");
         }
@@ -291,6 +324,8 @@ extern "C" HRESULT WINAPI DXGIGetDebugInterface1(UINT Flags, REFIID riid, void**
 BOOL APIENTRY DllMain(HMODULE, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         Log("=== dxgi.dll proxy carregado ===");
+    } else if (reason == DLL_PROCESS_DETACH) {
+        g_originalCreateSwapChain = nullptr;
     }
     return TRUE;
 }

@@ -31,10 +31,40 @@ static LONG g_loggedPatchAlready = 0;
 static std::chrono::steady_clock::time_point g_patchAppliedAt;
 static LONG g_loggedMeshShaderLatency = 0;
 static LONG g_loggedOptions = 0;
+static LONG g_loggedVRS = 0;
+static LONG g_loggedDirectStorage = 0;
+static LONG g_loggedUploadHeap = 0;
+static LONG g_loggedWG = 0;
 static constexpr size_t kCheckFeatureSupportVtableIndex = 13;
 static constexpr size_t kQueryVideoMemoryInfoVtableIndex = 56; 
 static constexpr size_t kMaxVtableProbeSlots = 128;
 static constexpr size_t kInvalidVtableIndex = (std::numeric_limits<size_t>::max)();
+static constexpr D3D12_FEATURE kD3D12FeatureOptions6 = static_cast<D3D12_FEATURE>(18);
+static constexpr D3D12_FEATURE kD3D12FeatureOptions15 = static_cast<D3D12_FEATURE>(27);
+static constexpr D3D12_FEATURE kD3D12FeatureOptions16 = static_cast<D3D12_FEATURE>(28);
+static constexpr D3D12_FEATURE kD3D12FeatureOptions19 = static_cast<D3D12_FEATURE>(101);
+
+struct D3D12_FEATURE_DATA_OPTIONS6_FALLBACK {
+    UINT VariableShadingRateTier;
+    UINT ShadingRateImageTileSize;
+};
+
+struct D3D12_FEATURE_DATA_OPTIONS2_FALLBACK {
+    BOOL ProgrammableSamplePositionsTier;
+};
+
+struct D3D12_FEATURE_DATA_OPTIONS15_FALLBACK {
+    BOOL DirectStorageSupported;
+};
+
+struct D3D12_FEATURE_DATA_OPTIONS16_FALLBACK {
+    BOOL GPUUploadHeapSupported;
+};
+
+struct D3D12_FEATURE_DATA_OPTIONS19_FALLBACK {
+    UINT WorkGraphsTier;
+    BOOL MeshNodesSupported;
+};
 
 static void Log(const char* msg) {
     std::lock_guard<std::mutex> lock(g_logMutex);
@@ -105,13 +135,13 @@ static HRESULT STDMETHODCALLTYPE HookedQueryVideoMemoryInfo(
     if (currentUsage == 0 && budget > 0) {
         currentUsage = 1024ULL * 1024ULL;
     }
-    memoryInfoFields[0] = 4294967296; // Budget = 4 GB
+    memoryInfoFields[0] = 8589934592ULL; // Budget = 8 GB
     memoryInfoFields[1] = currentUsage; // CurrentUsage = 10% do budget
     memoryInfoFields[2] = 0;          // CurrentReservation = 0
-    memoryInfoFields[3] = 4294967296; // AvailableForReservation = 4 GB
+    memoryInfoFields[3] = 8589934592ULL; // AvailableForReservation = 8 GB
 
     if (InterlockedCompareExchange(&g_loggedVideoMemoryInfo, 1, 0) == 0) {
-        Log("SPOOF: QueryVideoMemoryInfo interceptado! Forçando 4GB VRAM Budget.");
+        Log("SPOOF: QueryVideoMemoryInfo interceptado! Forçando 8GB VRAM Budget.");
     }
     return S_OK;
 }
@@ -147,8 +177,53 @@ static HRESULT STDMETHODCALLTYPE HookedCheckFeatureSupport(
     if (feature == D3D12_FEATURE_D3D12_OPTIONS12 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS12)) {
         auto* opts12 = reinterpret_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS12*>(pFeatureSupportData);
         opts12->EnhancedBarriersSupported = TRUE;
+        opts12->RelaxedFormatCastingSupported = TRUE;
         if (InterlockedCompareExchange(&g_loggedOptions12, 1, 0) == 0) {
             Log("SPOOF: EnhancedBarriersSupported FORCED TRUE");
+        }
+        return S_OK;
+    }
+
+    if (feature == D3D12_FEATURE_D3D12_OPTIONS2 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_OPTIONS2_FALLBACK)) {
+        auto* opts2 = reinterpret_cast<D3D12_FEATURE_DATA_OPTIONS2_FALLBACK*>(pFeatureSupportData);
+        opts2->ProgrammableSamplePositionsTier = TRUE;
+        return S_OK;
+    }
+
+    if (feature == kD3D12FeatureOptions6 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_OPTIONS6_FALLBACK)) {
+        auto* opts6 = reinterpret_cast<D3D12_FEATURE_DATA_OPTIONS6_FALLBACK*>(pFeatureSupportData);
+        opts6->VariableShadingRateTier = 2;
+        opts6->ShadingRateImageTileSize = 16;
+        if (InterlockedCompareExchange(&g_loggedVRS, 1, 0) == 0) {
+            Log("SPOOF: VariableShadingRateTier forced to TIER_2");
+        }
+        return S_OK;
+    }
+
+    if (feature == kD3D12FeatureOptions15 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_OPTIONS15_FALLBACK)) {
+        auto* opts15 = reinterpret_cast<D3D12_FEATURE_DATA_OPTIONS15_FALLBACK*>(pFeatureSupportData);
+        opts15->DirectStorageSupported = TRUE;
+        if (InterlockedCompareExchange(&g_loggedDirectStorage, 1, 0) == 0) {
+            Log("SPOOF: DirectStorageSupported FORCED TRUE");
+        }
+        return S_OK;
+    }
+
+    if (feature == kD3D12FeatureOptions16 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_OPTIONS16_FALLBACK)) {
+        auto* opts16 = reinterpret_cast<D3D12_FEATURE_DATA_OPTIONS16_FALLBACK*>(pFeatureSupportData);
+        opts16->GPUUploadHeapSupported = TRUE;
+        if (InterlockedCompareExchange(&g_loggedUploadHeap, 1, 0) == 0) {
+            Log("SPOOF: GPUUploadHeapSupported FORCED TRUE");
+        }
+        return S_OK;
+    }
+
+    if (feature == kD3D12FeatureOptions19 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_OPTIONS19_FALLBACK)) {
+        auto* opts19 = reinterpret_cast<D3D12_FEATURE_DATA_OPTIONS19_FALLBACK*>(pFeatureSupportData);
+        opts19->WorkGraphsTier = static_cast<D3D12_WORK_GRAPHS_TIER>(1);
+        opts19->MeshNodesSupported = TRUE;
+        if (InterlockedCompareExchange(&g_loggedWG, 1, 0) == 0) {
+            Log("SPOOF: Work Graphs Tier 1.0 FORCED TRUE");
         }
         return S_OK;
     }
