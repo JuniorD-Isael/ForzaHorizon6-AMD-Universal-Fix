@@ -35,6 +35,9 @@ static LONG g_loggedVRS = 0;
 static LONG g_loggedDirectStorage = 0;
 static LONG g_loggedUploadHeap = 0;
 static LONG g_loggedWG = 0;
+static LONG g_loggedOptions2 = 0;
+static LONG g_loggedOptions2Failed = 0;
+static LONG g_loggedWGFailed = 0;
 static constexpr size_t kCheckFeatureSupportVtableIndex = 13;
 static constexpr size_t kQueryVideoMemoryInfoVtableIndex = 56; 
 static constexpr size_t kMaxVtableProbeSlots = 128;
@@ -184,9 +187,19 @@ static HRESULT STDMETHODCALLTYPE HookedCheckFeatureSupport(
         return S_OK;
     }
 
+    if (feature == D3D12_FEATURE_D3D12_OPTIONS2 && featureSupportDataSize < sizeof(D3D12_FEATURE_DATA_OPTIONS2_FALLBACK)) {
+        if (InterlockedCompareExchange(&g_loggedOptions2Failed, 1, 0) == 0) {
+            Log("FAIL: Options2 request received but spoof skipped due to insufficient feature buffer");
+        }
+        return hr;
+    }
+
     if (feature == D3D12_FEATURE_D3D12_OPTIONS2 && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_OPTIONS2_FALLBACK)) {
         auto* opts2 = reinterpret_cast<D3D12_FEATURE_DATA_OPTIONS2_FALLBACK*>(pFeatureSupportData);
         opts2->ProgrammableSamplePositionsTier = TRUE;
+        if (InterlockedCompareExchange(&g_loggedOptions2, 1, 0) == 0) {
+            Log("SPOOF: ProgrammableSamplePositionsTier enabled");
+        }
         return S_OK;
     }
 
@@ -226,6 +239,13 @@ static HRESULT STDMETHODCALLTYPE HookedCheckFeatureSupport(
             Log("SPOOF: Work Graphs Tier 1.0 FORCED TRUE");
         }
         return S_OK;
+    }
+
+    if (feature == kD3D12FeatureOptions19 && featureSupportDataSize < sizeof(D3D12_FEATURE_DATA_OPTIONS19_FALLBACK)) {
+        if (InterlockedCompareExchange(&g_loggedWGFailed, 1, 0) == 0) {
+            Log("FAIL: Work Graphs request received but spoof skipped due to insufficient feature buffer");
+        }
+        return hr;
     }
 
     if (feature == D3D12_FEATURE_D3D12_OPTIONS && featureSupportDataSize >= sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)) {
