@@ -1,26 +1,18 @@
 param(
-    [string]$target = "d3d12"
+    [ValidateSet("d3d12", "dxgi", "all")]
+    [string]$target = "all",
+    [ValidateSet("standard", "enthusiast")]
+    [string]$profile = "standard"
 )
 
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$OutDir = Join-Path $Root "proxy_build"
+$SrcRoot = Join-Path $Root ("src\" + $profile)
+$OutDir = Join-Path $Root ("proxy_build\" + $profile)
 
-if ($target -eq "dxgi") {
-    $Src = Join-Path $Root "src\DXGIProxy.cpp"
-    $Asm = Join-Path $Root "src\DXGIProxyStubs.asm"
-    $Def = Join-Path $Root "src\dxgi_proxy.def"
-    $Out = Join-Path $OutDir "dxgi.dll"
-    $Obj = Join-Path $OutDir "DXGIProxy.obj"
-    $AsmObj = Join-Path $OutDir "DXGIProxyStubs.obj"
-} else {
-    $Src = Join-Path $Root "src\D3D12Proxy.cpp"
-    $Asm = Join-Path $Root "src\D3D12ProxyStubs.asm"
-    $Def = Join-Path $Root "src\d3d12_proxy.def"
-    $Out = Join-Path $OutDir "d3d12.dll"
-    $Obj = Join-Path $OutDir "D3D12Proxy.obj"
-    $AsmObj = Join-Path $OutDir "D3D12ProxyStubs.obj"
+if (!(Test-Path $SrcRoot)) {
+    Write-Error "Perfil de codigo fonte nao encontrado: $SrcRoot"
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -42,16 +34,52 @@ if ($vswhere) {
     }
 }
 
-if ($vcvars) {
-    cmd /c "`"$vcvars`" >nul && ml64.exe /nologo /c /Fo `"$AsmObj`" `"$Asm`" && cl.exe /nologo /EHsc /std:c++17 /LD `"$Src`" `"$AsmObj`" /Fe:`"$Out`" /Fo:`"$Obj`" /link /DEF:`"$Def`""
-    exit $LASTEXITCODE
+function Build-Target([string]$name) {
+    if ($name -eq "dxgi") {
+        $src = Join-Path $SrcRoot "DXGIProxy.cpp"
+        $asm = Join-Path $SrcRoot "DXGIProxyStubs.asm"
+        $def = Join-Path $SrcRoot "dxgi_proxy.def"
+        $out = Join-Path $OutDir "dxgi.dll"
+        $obj = Join-Path $OutDir "DXGIProxy.obj"
+        $asmObj = Join-Path $OutDir "DXGIProxyStubs.obj"
+    } else {
+        $src = Join-Path $SrcRoot "D3D12Proxy.cpp"
+        $asm = Join-Path $SrcRoot "D3D12ProxyStubs.asm"
+        $def = Join-Path $SrcRoot "d3d12_proxy.def"
+        $out = Join-Path $OutDir "d3d12.dll"
+        $obj = Join-Path $OutDir "D3D12Proxy.obj"
+        $asmObj = Join-Path $OutDir "D3D12ProxyStubs.obj"
+    }
+
+    foreach ($path in @($src, $asm, $def)) {
+        if (!(Test-Path $path)) {
+            Write-Error "Arquivo obrigatorio nao encontrado para '$name': $path"
+        }
+    }
+
+    if ($vcvars) {
+        cmd /c "`"$vcvars`" >nul && ml64.exe /nologo /c /Fo `"$asmObj`" `"$asm`" && cl.exe /nologo /EHsc /std:c++17 /LD `"$src`" `"$asmObj`" /Fe:`"$out`" /Fo:`"$obj`" /link /DEF:`"$def`""
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        return
+    }
+
+    if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+        & ml64.exe /nologo /c /Fo $asmObj $asm
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & cl.exe /nologo /EHsc /std:c++17 /LD $src $asmObj /Fe:$out /Fo:$obj /link /DEF:$def
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        return
+    }
+
+    Write-Error "cl.exe nao encontrado."
 }
 
-if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
-    & ml64.exe /nologo /c /Fo $AsmObj $Asm
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & cl.exe /nologo /EHsc /std:c++17 /LD $Src $AsmObj /Fe:$Out /Fo:$Obj /link /DEF:$Def
-    exit $LASTEXITCODE
+if ($target -eq "all") {
+    Build-Target "d3d12"
+    Build-Target "dxgi"
+    exit 0
 }
 
-Write-Error "cl.exe nao encontrado."
+Build-Target $target
+exit 0
+
